@@ -1,0 +1,197 @@
+import speech_recognition as sr
+import pyttsx3
+import datetime
+import wikipedia
+import webbrowser
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import requests
+import json
+import time
+
+# Initialize the speech recognition engine
+r = sr.Recognizer()
+
+# Set the default voice for text-to-speech synthesis
+engine = pyttsx3.init()
+voices = engine.getProperty('voices')
+engine.setProperty('voice', voices[0].id)  # Change the index to use a different voice if needed
+
+
+def speak(text):
+    engine.say(text)
+    engine.runAndWait()
+
+
+def greet():
+    hour = datetime.datetime.now().hour
+
+    if 0 <= hour < 12:
+        speak("Good morning!")
+
+    elif 12 <= hour < 18:
+        speak("Good afternoon!")
+
+    else:
+        speak("Good evening!")
+
+    speak("How can I assist you?")
+
+
+def listen():
+    with sr.Microphone() as source:
+        print("Listening...")
+        r.pause_threshold = 1
+        audio = r.listen(source)
+
+    try:
+        print("Recognizing...")
+        query = r.recognize_google(audio, language='en-US')
+        print(f"You said: {query}\n")
+
+    except Exception as e:
+        print("Sorry, I didn't catch that. Can you please repeat?")
+        return ""
+    return query
+
+
+def search_web(query):
+    speak(f"Searching for {query} on the web...")
+    url = "https://www.google.com/search?q=" + query
+    webbrowser.open(url)
+
+
+def send_email(to_email, subject, body):
+    from_email = "your_email@example.com"
+    from_password = "your_password"
+
+    msg = MIMEMultipart()
+    msg['From'] = from_email
+    msg['To'] = to_email
+    msg['Subject'] = subject
+
+    msg.attach(MIMEText(body, 'plain'))
+
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(from_email, from_password)
+        text = msg.as_string()
+        server.sendmail(from_email, to_email, text)
+        server.quit()
+        speak("Email has been sent successfully.")
+    except Exception as e:
+        print(e)
+        speak("Sorry, I was not able to send the email.")
+
+
+def get_email_info():
+    speak("To whom do you want to send the email?")
+    to_email = listen().lower()
+    speak("What is the subject of the email?")
+    subject = listen().lower()
+    speak("What should I say in the email?")
+    body = listen().lower()
+    send_email(to_email, subject, body)
+
+
+def get_weather(city):
+    api_key = "your_openweathermap_api_key"
+    base_url = "http://api.openweathermap.org/data/2.5/weather?"
+    complete_url = base_url + "q=" + city + "&appid=" + api_key
+    response = requests.get(complete_url)
+    data = response.json()
+    if data["cod"] != "404":
+        main = data["main"]
+        weather = data["weather"][0]
+        temperature = main["temp"]
+        description = weather["description"]
+        speak(f"The temperature in {city} is {temperature - 273.15:.2f} degrees Celsius with {description}.")
+    else:
+        speak("City not found.")
+
+
+def get_news():
+    api_key = "your_newsapi_api_key"
+    url = f"https://newsapi.org/v2/top-headlines?country=us&apiKey={api_key}"
+    response = requests.get(url)
+    data = response.json()
+    articles = data["articles"]
+    speak("Here are the top news headlines:")
+    for i, article in enumerate(articles[:5], 1):
+        speak(f"Headline {i}: {article['title']}")
+
+
+def set_reminder(reminder, seconds):
+    speak(f"Setting a reminder for {reminder} in {seconds} seconds.")
+    time.sleep(seconds)
+    speak(f"Reminder: {reminder}")
+
+
+def execute_command(command):
+    if "hello" in command:
+        speak("Hello there!")
+
+    elif 'wikipedia' in command:
+        speak('Searching Wikipedia...')
+        command = command.replace("wikipedia", "")
+        results = wikipedia.summary(command, sentences=2)
+        speak('According to Wikipedia')
+        print(results)
+        speak(results)
+        
+    elif "search" in command:
+        search_query = command.split("search")[-1].strip()
+        search_web(search_query)
+
+    elif 'open youtube' in command:
+        webbrowser.open("youtube.com")
+
+    elif 'open google' in command:
+        webbrowser.open("google.com")
+
+    elif 'play music' in command:
+        # Add code to play music from a local directory or a streaming service (e.g., Spotify)
+        webbrowser.open("spotify.com")
+
+    elif 'time' in command:
+        now = datetime.datetime.now().strftime("%H:%M:%S")
+        speak(f"The time is {now}")
+
+    elif 'date' in command:
+        now = datetime.datetime.now().strftime("%D-%m-%Y")
+        speak(f"The date is {now}")
+
+    elif 'send email' in command:
+        get_email_info()
+
+    elif 'weather' in command:
+        speak("Which city's weather would you like to know?")
+        city = listen().lower()
+        get_weather(city)
+
+    elif 'news' in command:
+        get_news()
+
+    elif 'set reminder' in command:
+        speak("What should I remind you about?")
+        reminder = listen().lower()
+        speak("In how many seconds?")
+        seconds = int(listen().lower())
+        set_reminder(reminder, seconds)
+
+    elif 'exit' in command:
+        speak("Goodbye!")
+        exit()
+
+    else:
+        speak("I'm sorry, I couldn't understand your command.")
+
+
+if __name__ == "__main__":
+    greet()
+    while True:
+        command = listen().lower()
+        if command:
+            execute_command(command)
